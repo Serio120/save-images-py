@@ -1,3 +1,4 @@
+
 import tkinter as tk
 from tkinter import filedialog, messagebox, Listbox, Scrollbar, Entry, Label
 import mysql.connector
@@ -16,7 +17,6 @@ DB_CONFIG = {
 conn = mysql.connector.connect(**DB_CONFIG)
 cursor = conn.cursor()
 
-# Crear tabla si no existe
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS imagenes (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -48,7 +48,7 @@ def insertar_imagenes():
     conn.commit()
     mensaje = f"Se insertaron {insertadas} imágenes."
     if duplicadas:
-        mensaje += f"\nDuplicadas no insertadas: {', '.join(duplicadas)}"
+        mensaje += f" Duplicadas no insertadas: {', '.join(duplicadas)}"
     messagebox.showinfo("Resultado", mensaje)
     listar_imagenes()
 
@@ -69,7 +69,7 @@ def listar_imagenes(filtro_nombre='', filtro_extension=''):
         if filtro_extension and not nombre.lower().endswith(filtro_extension):
             continue
         lista.insert(tk.END, nombre)
-    contador_label.config(text=f"Total imágenes: {len(resultados)}")
+    contador_label.config(text=f"Total imágenes: {len(lista.get(0, tk.END))}")
 
 def ver_imagen():
     seleccion = lista.curselection()
@@ -122,9 +122,58 @@ def aplicar_filtros():
     filtro_extension = entrada_extension.get().strip().lower()
     listar_imagenes(filtro_nombre, filtro_extension)
 
+def exportar_seleccionadas():
+    seleccion = lista.curselection()
+    if not seleccion:
+        messagebox.showwarning("Aviso", "Selecciona una o más imágenes.")
+        return
+    carpeta_destino = filedialog.askdirectory(title="Selecciona carpeta de destino")
+    if not carpeta_destino:
+        return
+    for i in seleccion:
+        nombre = lista.get(i)
+        cursor.execute("SELECT imagen FROM imagenes WHERE nombre=%s", (nombre,))
+        resultado = cursor.fetchone()
+        if resultado:
+            imagen_binaria = resultado[0]
+            ruta = os.path.join(carpeta_destino, nombre)
+            with open(ruta, 'wb') as f:
+                f.write(imagen_binaria)
+    messagebox.showinfo("Exportación completa", f"Se exportaron {len(seleccion)} imágenes a {carpeta_destino}")
+
+def exportar_todas_filtradas():
+    filtro_nombre = entrada_busqueda.get().strip()
+    filtro_extension = entrada_extension.get().strip().lower()
+    query = "SELECT nombre, imagen FROM imagenes"
+    condiciones = []
+    valores = []
+    if filtro_nombre:
+        condiciones.append("nombre LIKE %s")
+        valores.append(f"%{filtro_nombre}%")
+    if condiciones:
+        query += " WHERE " + " AND ".join(condiciones)
+    query += " ORDER BY id DESC"
+    cursor.execute(query, valores)
+    resultados = cursor.fetchall()
+    if not resultados:
+        messagebox.showinfo("Sin resultados", "No hay imágenes para exportar.")
+        return
+    carpeta_destino = filedialog.askdirectory(title="Selecciona carpeta de destino")
+    if not carpeta_destino:
+        return
+    exportadas = 0
+    for nombre, imagen_binaria in resultados:
+        if filtro_extension and not nombre.lower().endswith(filtro_extension):
+            continue
+        ruta = os.path.join(carpeta_destino, nombre)
+        with open(ruta, 'wb') as f:
+            f.write(imagen_binaria)
+        exportadas += 1
+    messagebox.showinfo("Exportación completa", f"Se exportaron {exportadas} imágenes a {carpeta_destino}")
+
 ventana = tk.Tk()
 ventana.title("Gestión Avanzada de Imágenes en MySQL")
-ventana.geometry("800x700")
+ventana.geometry("800x800")
 
 btn_insertar = tk.Button(ventana, text="Insertar Imágenes", command=insertar_imagenes)
 btn_insertar.pack(pady=5)
@@ -137,6 +186,12 @@ btn_descargar.pack(pady=5)
 
 btn_eliminar = tk.Button(ventana, text="Eliminar Imagen", command=eliminar_imagen)
 btn_eliminar.pack(pady=5)
+
+btn_exportar = tk.Button(ventana, text="Exportar seleccionadas (Solo Click)", command=exportar_seleccionadas)
+btn_exportar.pack(pady=5) 
+
+btn_exportar_todas = tk.Button(ventana, text="Exportar todas filtradas", command=exportar_todas_filtradas)
+btn_exportar_todas.pack(pady=5)
 
 frame_filtros = tk.Frame(ventana)
 frame_filtros.pack(pady=10)
@@ -153,7 +208,7 @@ frame_lista = tk.Frame(ventana)
 frame_lista.pack(pady=10)
 scrollbar = Scrollbar(frame_lista)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-lista = Listbox(frame_lista, width=50, height=15, yscrollcommand=scrollbar.set)
+lista = Listbox(frame_lista, width=50, height=15, yscrollcommand=scrollbar.set, selectmode=tk.MULTIPLE)
 lista.pack(side=tk.LEFT)
 scrollbar.config(command=lista.yview)
 
