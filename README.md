@@ -89,5 +89,3 @@ Esto instalará automáticamente:
 *   `pillow`
 
 ***
-
-Puedes pegar esta sección justo después de la parte de **Instalación de dependencias** en tu `README.md`. Si quieres, también puedo generar una versión completa del `README.md` con esta sección ya integrada. ¿Te gustaría eso?
